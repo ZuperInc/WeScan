@@ -42,10 +42,12 @@ public final class CameraScannerViewController: UIViewController {
 
     /// Whether flash is enabled
     private var flashEnabled = false
+    var isPortrait: Bool = true
 
     override public func viewDidLoad() {
         super.viewDidLoad()
         setupView()
+        NotificationCenter.default.addObserver(self, selector: #selector(orientationDidChange), name: UIDevice.orientationDidChangeNotification, object: nil)
     }
 
     override public func viewWillAppear(_ animated: Bool) {
@@ -60,6 +62,24 @@ public final class CameraScannerViewController: UIViewController {
         super.viewDidLayoutSubviews()
 
         videoPreviewLayer.frame = view.layer.bounds
+    }
+    
+    @objc private func orientationDidChange() {
+        updateVideoOrientation()
+    }
+    
+    private func updateVideoOrientation() {
+        print("Orientation did change")
+        guard let connection = videoPreviewLayer.connection, connection.isVideoOrientationSupported else { return }
+        guard let scene = UIApplication.currentUIWindowScenes else { return }
+        
+        if connection.isVideoOrientationSupported {
+            isPortrait = !(scene.interfaceOrientation == .landscapeLeft || scene.interfaceOrientation == .landscapeRight)
+            let orientation = AVCaptureVideoOrientation(interfaceOrientation: scene.interfaceOrientation) ?? .portrait
+            connection.videoOrientation = orientation
+            
+        }
+        captureSessionManager?.setOrientationForCamera()
     }
 
     override public func viewWillDisappear(_ animated: Bool) {
@@ -89,6 +109,10 @@ public final class CameraScannerViewController: UIViewController {
             name: Notification.Name.AVCaptureDeviceSubjectAreaDidChange,
             object: nil
         )
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
     }
 
     private func setupConstraints() {
@@ -178,24 +202,97 @@ extension CameraScannerViewController: RectangleDetectionDelegateProtocol {
                                withQuad quad: Quadrilateral?) {
         delegate?.captureImageSuccess(image: picture, withQuad: quad)
     }
+    
+//    func captureSessionManager(_ captureSessionManager: CaptureSessionManager,
+//                               didDetectQuad quad: Quadrilateral?,
+//                               _ imageSize: CGSize) {
+//        guard let quad else {
+//            // Remove the quadrilateral if none is detected
+//            quadView.removeQuadrilateral()
+//            return
+//        }
+//        
+//        // Determine the proper image size for the current orientation
+//        let adjustedImageSize: CGSize
+//        let rotationTransform: CGAffineTransform
+//        
+//        if isPortrait {
+//            adjustedImageSize = CGSize(width: imageSize.height, height: imageSize.width)
+//            rotationTransform = CGAffineTransform(rotationAngle: CGFloat.pi / 2.0) // 90 degrees
+//        } else {
+//            adjustedImageSize = imageSize // Keep the original size
+//            rotationTransform = CGAffineTransform.identity // No rotation needed
+//        }
+//
+//        // Apply scaling to fit the image into the quadView
+//        let scaleTransform = CGAffineTransform.scaleTransform(forSize: adjustedImageSize, aspectFillInSize: quadView.bounds.size)
+//        let scaledImageSize = adjustedImageSize.applying(scaleTransform)
+//        
+//        // Get the image bounds after scaling and rotating
+//        let imageBounds = CGRect(origin: .zero, size: scaledImageSize).applying(rotationTransform)
+//        
+//        // Apply translation to center the image within the quadView
+//        let translationTransform = CGAffineTransform.translateTransform(fromCenterOfRect: imageBounds, toCenterOfRect: quadView.bounds)
+//        
+//        // Combine all the transformations
+//        let transforms = [scaleTransform, rotationTransform, translationTransform]
+//        
+//        // Apply the transformations to the quad
+//        let transformedQuad = quad.applyTransforms(transforms)
+//        
+//        // Draw the transformed quad in the quadView
+//        quadView.drawQuadrilateral(quad: transformedQuad, animated: true)
+//    }
 
     func captureSessionManager(_ captureSessionManager: CaptureSessionManager,
-                               didDetectQuad quad: Quadrilateral?,
-                               _ imageSize: CGSize) {
-        guard let quad else {
-            // If no quad has been detected, we remove the currently displayed on on the quadView.
-            quadView.removeQuadrilateral()
-            return
-        }
+                                  didDetectQuad quad: Quadrilateral?,
+                                  _ imageSize: CGSize) {
+           guard let quad else {
+               // If no quad has been detected, we remove the currently displayed on on the quadView.
+               quadView.removeQuadrilateral()
+               return
+           }
 
-        let portraitImageSize = CGSize(width: imageSize.height, height: imageSize.width)
-        let scaleTransform = CGAffineTransform.scaleTransform(forSize: portraitImageSize, aspectFillInSize: quadView.bounds.size)
-        let scaledImageSize = imageSize.applying(scaleTransform)
-        let rotationTransform = CGAffineTransform(rotationAngle: CGFloat.pi / 2.0)
-        let imageBounds = CGRect(origin: .zero, size: scaledImageSize).applying(rotationTransform)
-        let translationTransform = CGAffineTransform.translateTransform(fromCenterOfRect: imageBounds, toCenterOfRect: quadView.bounds)
-        let transforms = [scaleTransform, rotationTransform, translationTransform]
-        let transformedQuad = quad.applyTransforms(transforms)
-        quadView.drawQuadrilateral(quad: transformedQuad, animated: true)
+           let adjustedImageSize: CGSize
+           if isPortrait {
+               adjustedImageSize = CGSize(width: imageSize.height, height: imageSize.width)
+           } else {
+               adjustedImageSize = imageSize
+           }
+           let scaleTransform = CGAffineTransform.scaleTransform(forSize: adjustedImageSize, aspectFillInSize: quadView.bounds.size)
+           let scaledImageSize = imageSize.applying(scaleTransform)
+           let rotationTransform = isPortrait ? CGAffineTransform(rotationAngle: CGFloat.pi / 2.0) : .identity
+           let imageBounds = CGRect(origin: .zero, size: scaledImageSize).applying(rotationTransform)
+           let translationTransform = CGAffineTransform.translateTransform(fromCenterOfRect: imageBounds, toCenterOfRect: quadView.bounds)
+           let transforms = [scaleTransform, rotationTransform, translationTransform]
+           let transformedQuad = quad.applyTransforms(transforms)
+           quadView.drawQuadrilateral(quad: transformedQuad, animated: true)
+       }
+
+}
+
+extension UIApplication {
+    public static var currentUIWindowScenes: UIWindowScene? {
+        let connectedScenes = UIApplication.shared.connectedScenes
+            .filter { $0.activationState == .foregroundActive }
+            .compactMap { $0 as? UIWindowScene }
+        
+        return connectedScenes.first
+    }
+}
+extension AVCaptureVideoOrientation {
+    init?(interfaceOrientation: UIInterfaceOrientation) {
+        switch interfaceOrientation {
+        case .portrait:
+            self = .portrait
+        case .portraitUpsideDown:
+            self = .portraitUpsideDown
+        case .landscapeLeft:
+            self = .landscapeLeft
+        case .landscapeRight:
+            self = .landscapeRight
+        default:
+            return nil
+        }
     }
 }

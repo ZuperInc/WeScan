@@ -132,6 +132,19 @@ final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSampleBuffe
 
         videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue(label: "video_ouput_queue"))
     }
+    
+    func setOrientationForCamera() {
+        guard let scene = UIApplication.currentUIWindowScenes else { return }
+        if let videoConnection = photoOutput.connection(with: .video),
+           videoConnection.isVideoOrientationSupported {
+            let orientation = AVCaptureVideoOrientation(interfaceOrientation: scene.interfaceOrientation)
+            if orientation == .landscapeLeft || orientation == .landscapeRight {
+                videoConnection.videoOrientation = orientation == .landscapeLeft ? .landscapeRight : .landscapeLeft
+            } else if let orientation {
+                videoConnection.videoOrientation = orientation
+            }
+        }
+    }
 
     // MARK: Capture Session Life Cycle
 

@@ -161,14 +161,16 @@ public final class EditImageViewController: UIViewController {
     }
 
     private func displayQuad() {
-        let imageSize = image.size
+        let quadImage = image.applyingPortraitOrientation()
+        let imageSize = quadImage.size
         let size = CGSize(width: quadViewWidthConstraint.constant, height: quadViewHeightConstraint.constant)
         let imageFrame = CGRect(origin: quadView.frame.origin, size: size)
 
         let scaleTransform = CGAffineTransform.scaleTransform(forSize: imageSize, aspectFillInSize: imageFrame.size)
+
         let transforms = [scaleTransform]
         let transformedQuad = quad.applyTransforms(transforms)
-
+        
         quadView.drawQuadrilateral(quad: transformedQuad, animated: false)
     }
 
