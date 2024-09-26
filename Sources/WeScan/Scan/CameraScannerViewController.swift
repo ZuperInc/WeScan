@@ -47,6 +47,7 @@ public final class CameraScannerViewController: UIViewController {
     override public func viewDidLoad() {
         super.viewDidLoad()
         setupView()
+        updateVideoOrientation()
         NotificationCenter.default.addObserver(self, selector: #selector(orientationDidChange), name: UIDevice.orientationDidChangeNotification, object: nil)
     }
 
@@ -60,7 +61,6 @@ public final class CameraScannerViewController: UIViewController {
 
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-
         videoPreviewLayer.frame = view.layer.bounds
     }
     
